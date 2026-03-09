@@ -2,21 +2,11 @@
 
 GitHub issues are provided at start of context. Parse it to get open issues with their bodies and comments.
 
-<prd>
+You will work on the AFK issues only, not the HITL ones.
 
-!`cat {{ PRD_LOCATION }}`
+You've also been passed a file containing the last few commits. Review these to understand what work has been done.
 
-</prd>
-
-And here is the multi-phase plan for it:
-
-<plan>
-
-!`cat {{ PLAN_LOCATION }}`
-
-</plan>
-
-If all tasks are complete, output <promise>NO MORE TASKS</promise>.
+If all AFK tasks are complete, output <promise>NO MORE TASKS</promise>.
 
 # TASK SELECTION
 
