@@ -1,8 +1,20 @@
 # INPUTS
 
-A PRD and plan have been provided to you. Read these to understand the task.
+Here is a PRD for the feature you need to build:
 
-You've also been passed a file containing the last few commits. Review these to understand what work has been done.
+<prd>
+
+!`cat {{ PRD_LOCATION }}`
+
+</prd>
+
+And here is the multi-phase plan for it:
+
+<plan>
+
+!`cat {{ PLAN_LOCATION }}`
+
+</plan>
 
 If there are no more tasks to complete, output <promise>NO MORE TASKS</promise>.
 
