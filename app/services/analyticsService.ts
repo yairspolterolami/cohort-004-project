@@ -1,6 +1,12 @@
 import { sql, eq } from "drizzle-orm";
 import { db } from "~/db";
-import { purchases, enrollments, courseRatings, courses } from "~/db/schema";
+import {
+  purchases,
+  enrollments,
+  courseRatings,
+  courses,
+  users,
+} from "~/db/schema";
 
 // ─── Analytics Service ───
 // Encapsulates all database query logic for the instructor analytics dashboard.
@@ -309,4 +315,107 @@ export function getPerCourseBreakdown(opts: {
       ratingCount: ratingResult?.count ?? 0,
     };
   });
+}
+
+// ─── Admin (Platform-Wide) Analytics ───
+
+export interface AdminAnalyticsSummary {
+  totalRevenue: number;
+  totalEnrollments: number;
+  topEarningCourse: { title: string; revenue: number } | null;
+}
+
+export function getAdminAnalyticsSummary(opts: {
+  period: TimePeriod;
+}): AdminAnalyticsSummary {
+  const startDate = getStartDate(opts.period);
+
+  const revenueResult = db
+    .select({ total: sql<number>`coalesce(sum(${purchases.pricePaid}), 0)` })
+    .from(purchases)
+    .where(startDate ? sql`${purchases.createdAt} >= ${startDate}` : sql`1=1`)
+    .get();
+
+  const enrollmentResult = db
+    .select({ count: sql<number>`count(*)` })
+    .from(enrollments)
+    .where(
+      startDate ? sql`${enrollments.enrolledAt} >= ${startDate}` : sql`1=1`
+    )
+    .get();
+
+  const topCourseResult = db
+    .select({
+      title: courses.title,
+      revenue: sql<number>`coalesce(sum(${purchases.pricePaid}), 0)`,
+    })
+    .from(purchases)
+    .innerJoin(courses, eq(purchases.courseId, courses.id))
+    .where(startDate ? sql`${purchases.createdAt} >= ${startDate}` : sql`1=1`)
+    .groupBy(courses.id)
+    .orderBy(sql`sum(${purchases.pricePaid}) desc`)
+    .limit(1)
+    .get();
+
+  return {
+    totalRevenue: revenueResult?.total ?? 0,
+    totalEnrollments: enrollmentResult?.count ?? 0,
+    topEarningCourse: topCourseResult
+      ? { title: topCourseResult.title, revenue: topCourseResult.revenue }
+      : null,
+  };
+}
+
+export function getAdminRevenueTimeSeries(opts: {
+  period: TimePeriod;
+}): RevenueDataPoint[] {
+  const { period } = opts;
+  const now = new Date();
+  const useDaily = period === "7d" || period === "30d";
+
+  const startDateStr = getStartDate(period);
+  let rangeStart: Date;
+
+  if (startDateStr) {
+    rangeStart = new Date(startDateStr);
+  } else {
+    const earliest = db
+      .select({
+        minDate: sql<string | null>`min(${purchases.createdAt})`,
+      })
+      .from(purchases)
+      .get();
+
+    if (!earliest?.minDate) return [];
+    rangeStart = new Date(earliest.minDate);
+  }
+
+  const keys = useDaily
+    ? generateDailyKeys(rangeStart, now)
+    : generateMonthlyKeys(rangeStart, now);
+
+  const groupExpr = useDaily
+    ? sql<string>`substr(${purchases.createdAt}, 1, 10)`
+    : sql<string>`substr(${purchases.createdAt}, 1, 7)`;
+
+  const whereClause = startDateStr
+    ? sql`${purchases.createdAt} >= ${startDateStr}`
+    : sql`1=1`;
+
+  const rows = db
+    .select({
+      dateKey: groupExpr,
+      revenue: sql<number>`coalesce(sum(${purchases.pricePaid}), 0)`,
+    })
+    .from(purchases)
+    .where(whereClause)
+    .groupBy(groupExpr)
+    .all();
+
+  const revenueMap = new Map(rows.map((r) => [r.dateKey, r.revenue]));
+
+  return keys.map((key) => ({
+    date: key,
+    revenue: revenueMap.get(key) ?? 0,
+  }));
 }
