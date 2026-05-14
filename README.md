@@ -1,9 +1,9 @@
 <div align="center">
 <a href="https://www.aihero.dev/cohorts/ai-coding-for-real-engineers-with-claude-code-2026-04">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://res.cloudinary.com/total-typescript/image/upload/v1773381447/github-project-header-dark_2x.png" />
-    <source media="(prefers-color-scheme: light)" srcset="https://res.cloudinary.com/total-typescript/image/upload/v1773381447/github-project-header-light_2x.png" />
-    <img src="https://res.cloudinary.com/total-typescript/image/upload/v1773381447/github-project-header-light_2x.png" width="421" height="102" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://res.cloudinary.com/total-typescript/image/upload/v1778752130/github-project-header-june-dark_2x.png" />
+    <source media="(prefers-color-scheme: light)" srcset="https://res.cloudinary.com/total-typescript/image/upload/v1778752130/github-project-header-june-light_2x.png" />
+    <img src="https://res.cloudinary.com/total-typescript/image/upload/v1778752130/github-project-header-june-light_2x.png" width="421" height="102" />
     </picture>
 </a>
 </div>
