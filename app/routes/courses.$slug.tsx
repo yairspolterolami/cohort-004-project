@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useFetcher, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import type { Route } from "./+types/courses.$slug";
 import {
@@ -42,6 +42,8 @@ import { formatDuration, formatPrice } from "~/lib/utils";
 import { renderMarkdown } from "~/lib/markdown.server";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice, getCountryTierInfo } from "~/lib/ppp";
+import { getCourseRatingStats, getUserCourseReview } from "~/services/reviewService";
+import { StarDisplay, StarInput } from "~/components/star-rating";
 
 export function meta({ data: loaderData }: Route.MetaArgs) {
   const title = loaderData?.course?.title ?? "Course";
@@ -102,6 +104,13 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     : courseWithDetails.price;
   const tierInfo = getCountryTierInfo(country);
 
+  const { avg: avgRating, count: ratingCount } = getCourseRatingStats(course.id);
+  let userRating: number | null = null;
+  if (currentUserId && enrolled) {
+    const review = getUserCourseReview(currentUserId, course.id);
+    userRating = review?.rating ?? null;
+  }
+
   return {
     course: courseWithDetails,
     salesCopyHtml,
@@ -113,6 +122,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     currentUserId,
     pppPrice,
     tierInfo,
+    avgRating,
+    ratingCount,
+    userRating,
   };
 }
 
@@ -181,9 +193,14 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
     currentUserId,
     pppPrice,
     tierInfo,
+    avgRating,
+    ratingCount,
+    userRating: initialUserRating,
   } = loaderData;
   const isInstructor = currentUserId === course.instructorId;
   const [searchParams, setSearchParams] = useSearchParams();
+  const [userRating, setUserRating] = useState<number | null>(initialUserRating);
+  const ratingFetcher = useFetcher();
 
   useEffect(() => {
     if (searchParams.get("already_enrolled") === "1") {
@@ -301,7 +318,7 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
         <p className="mb-4 text-lg text-muted-foreground">
           {course.description}
         </p>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <UserAvatar
               name={course.instructorName}
@@ -319,6 +336,9 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
               <Clock className="size-4" />
               {formatDuration(totalDuration, true, false, false)} total
             </span>
+          )}
+          {avgRating !== null && (
+            <StarDisplay rating={avgRating} count={ratingCount} size="md" />
           )}
         </div>
       </div>
@@ -413,6 +433,29 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
                       Buy More Seats
                     </Button>
                   </Link>
+                  <div className="border-t pt-3">
+                    <p className="mb-2 text-sm font-medium">Rate this course</p>
+                    <StarInput
+                      currentRating={userRating}
+                      onRate={(rating) => {
+                        setUserRating(rating);
+                        ratingFetcher.submit(
+                          { courseId: course.id, rating },
+                          {
+                            method: "POST",
+                            action: "/api/course-reviews",
+                            encType: "application/json",
+                          }
+                        );
+                      }}
+                      disabled={ratingFetcher.state === "submitting"}
+                    />
+                    {userRating !== null && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Your rating: {userRating}/5
+                      </p>
+                    )}
+                  </div>
                 </>
               ) : (
                 enrollButton
