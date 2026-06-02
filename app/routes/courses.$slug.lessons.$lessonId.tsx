@@ -49,6 +49,8 @@ import {
 import { cn, formatDuration } from "~/lib/utils";
 import { renderMarkdown } from "~/lib/markdown.server";
 import { YouTubePlayer } from "~/components/youtube-player";
+import { LessonComments } from "~/components/lesson-comments";
+import { getTopLevelComments } from "~/services/commentService";
 import { data, isRouteErrorResponse } from "react-router";
 import { z } from "zod";
 import { resolveCountry } from "~/lib/country.server";
@@ -248,11 +250,17 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     }
   }
 
+  const { comments: initialComments, total: totalComments } = getTopLevelComments(lessonId, 0, 10);
+
+  const isInstructor = !!currentUserId && course.instructorId === currentUserId;
+  const canComment = enrolled || isInstructor;
+
   return {
     course: {
       id: courseWithDetails.id,
       title: courseWithDetails.title,
       slug: courseWithDetails.slug,
+      instructorId: courseWithDetails.instructorId,
     },
     curriculum: courseWithDetails.modules.map((m) => ({
       id: m.id,
@@ -281,6 +289,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     pppBlocked,
     pppBlockedCountry,
     pppPurchaseCountry,
+    initialComments,
+    totalComments,
+    canComment,
   };
 }
 
@@ -382,6 +393,9 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
     pppBlocked,
     pppBlockedCountry,
     pppPurchaseCountry,
+    initialComments,
+    totalComments,
+    canComment,
   } = loaderData;
   const [autoplay, toggleAutoplay] = useAutoplay();
   const fetcher = useFetcher({ key: `mark-complete-${lesson.id}` });
@@ -591,6 +605,16 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
               )}
             </div>
           )}
+
+          {/* Discussion */}
+          <LessonComments
+            lessonId={lesson.id}
+            instructorId={course.instructorId}
+            currentUserId={currentUserId ?? null}
+            canComment={canComment}
+            initialComments={initialComments}
+            initialTotal={totalComments}
+          />
 
           {/* Prev/Next Navigation */}
           <div className="flex items-center justify-between border-t pt-6">
