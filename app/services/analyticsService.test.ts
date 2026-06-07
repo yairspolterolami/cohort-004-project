@@ -295,4 +295,266 @@ describe("analyticsService", () => {
       expect(summary.averageRating).toBeNull();
     });
   });
+
+  describe("getInstructorAnalytics — revenue time series", () => {
+    it("buckets revenue by day for the 7d period, one point per day", () => {
+      insertPurchase({
+        userId: base.user.id,
+        courseId: base.course.id,
+        pricePaid: 5000,
+        createdAt: daysAgo(2),
+      });
+      insertPurchase({
+        userId: base.user.id,
+        courseId: base.course.id,
+        pricePaid: 3000,
+        createdAt: daysAgo(2),
+      });
+
+      const { timeSeries } = getInstructorAnalytics({
+        instructorId: base.instructor.id,
+        period: "7d",
+        now: NOW,
+      });
+
+      // 7d window: cutoff day (2026-05-31) through today (2026-06-07) = 8 days.
+      expect(timeSeries).toHaveLength(8);
+      // Daily keys are "YYYY-MM-DD".
+      expect(timeSeries.every((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date))).toBe(
+        true
+      );
+      // The two purchases land in the same day bucket and sum.
+      const day = daysAgo(2).slice(0, 10);
+      const point = timeSeries.find((p) => p.date === day);
+      expect(point?.revenue).toBe(8000);
+    });
+
+    it("fills zero-revenue days as $0 so the line has no gaps", () => {
+      insertPurchase({
+        userId: base.user.id,
+        courseId: base.course.id,
+        pricePaid: 5000,
+        createdAt: daysAgo(1),
+      });
+
+      const { timeSeries } = getInstructorAnalytics({
+        instructorId: base.instructor.id,
+        period: "7d",
+        now: NOW,
+      });
+
+      // Every bucket is present; the days without a purchase read 0, not absent.
+      const withRevenue = timeSeries.filter((p) => p.revenue > 0);
+      expect(withRevenue).toHaveLength(1);
+      expect(timeSeries.filter((p) => p.revenue === 0).length).toBeGreaterThan(
+        0
+      );
+    });
+
+    it("buckets revenue by month for the 12m period", () => {
+      // daysAgo(3) = 2026-06-04 → current month (2026-06).
+      insertPurchase({
+        userId: base.user.id,
+        courseId: base.course.id,
+        pricePaid: 4000,
+        createdAt: daysAgo(3),
+      });
+      // daysAgo(40) = 2026-04-28 → a prior month.
+      insertPurchase({
+        userId: base.user.id,
+        courseId: base.course.id,
+        pricePaid: 1000,
+        createdAt: daysAgo(40),
+      });
+
+      const { timeSeries } = getInstructorAnalytics({
+        instructorId: base.instructor.id,
+        period: "12m",
+        now: NOW,
+      });
+
+      // 12m window: 12 months ago (2025-06) through now (2026-06) = 13 months.
+      expect(timeSeries).toHaveLength(13);
+      // Monthly keys are "YYYY-MM".
+      expect(timeSeries.every((p) => /^\d{4}-\d{2}$/.test(p.date))).toBe(true);
+      const currentMonth = NOW.toISOString().slice(0, 7);
+      expect(timeSeries.find((p) => p.date === currentMonth)?.revenue).toBe(
+        4000
+      );
+      const priorMonth = daysAgo(40).slice(0, 7);
+      expect(timeSeries.find((p) => p.date === priorMonth)?.revenue).toBe(1000);
+    });
+
+    it("'all' starts the series at the instructor's first purchase month", () => {
+      insertPurchase({
+        userId: base.user.id,
+        courseId: base.course.id,
+        pricePaid: 2000,
+        createdAt: daysAgo(60),
+      });
+
+      const { timeSeries } = getInstructorAnalytics({
+        instructorId: base.instructor.id,
+        period: "all",
+        now: NOW,
+      });
+
+      const firstMonth = daysAgo(60).slice(0, 7);
+      const currentMonth = NOW.toISOString().slice(0, 7);
+      expect(timeSeries[0]?.date).toBe(firstMonth);
+      expect(timeSeries[timeSeries.length - 1]?.date).toBe(currentMonth);
+    });
+
+    it("returns an empty series for 'all' when there are no purchases", () => {
+      const { timeSeries } = getInstructorAnalytics({
+        instructorId: base.instructor.id,
+        period: "all",
+        now: NOW,
+      });
+
+      expect(timeSeries).toEqual([]);
+    });
+  });
+
+  describe("getInstructorAnalytics — per-course breakdown", () => {
+    it("attributes revenue, sales, enrollments, and ratings to each course", () => {
+      // A second course owned by the same instructor.
+      const course2 = testDb
+        .insert(schema.courses)
+        .values({
+          title: "Second Course",
+          slug: "second-course",
+          description: "Also mine",
+          instructorId: base.instructor.id,
+          categoryId: base.category.id,
+          status: schema.CourseStatus.Published,
+          price: 9900,
+        })
+        .returning()
+        .get();
+
+      // Course 1: two sales, one enrollment, one rating.
+      insertPurchase({
+        userId: base.user.id,
+        courseId: base.course.id,
+        pricePaid: 5000,
+        createdAt: daysAgo(2),
+      });
+      insertPurchase({
+        userId: base.user.id,
+        courseId: base.course.id,
+        pricePaid: 4000,
+        createdAt: daysAgo(3),
+      });
+      insertEnrollment({
+        userId: base.user.id,
+        courseId: base.course.id,
+        enrolledAt: daysAgo(2),
+      });
+      insertRating({
+        userId: base.user.id,
+        courseId: base.course.id,
+        rating: 4,
+        createdAt: daysAgo(2),
+      });
+
+      // Course 2: one sale, no enrollments, two ratings.
+      const student2 = makeStudent("s2@example.com");
+      insertPurchase({
+        userId: student2.id,
+        courseId: course2.id,
+        pricePaid: 9900,
+        createdAt: daysAgo(1),
+      });
+      insertRating({
+        userId: base.user.id,
+        courseId: course2.id,
+        rating: 5,
+        createdAt: daysAgo(1),
+      });
+      insertRating({
+        userId: student2.id,
+        courseId: course2.id,
+        rating: 4,
+        createdAt: daysAgo(1),
+      });
+
+      const { courses } = getInstructorAnalytics({
+        instructorId: base.instructor.id,
+        period: "7d",
+        now: NOW,
+      });
+
+      const c1 = courses.find((c) => c.courseId === base.course.id);
+      const c2 = courses.find((c) => c.courseId === course2.id);
+
+      expect(c1).toMatchObject({
+        revenue: 9000,
+        salesCount: 2,
+        enrollmentCount: 1,
+        averageRating: 4,
+        ratingCount: 1,
+      });
+      expect(c2).toMatchObject({
+        title: "Second Course",
+        listPrice: 9900,
+        revenue: 9900,
+        salesCount: 1,
+        enrollmentCount: 0,
+        averageRating: 4.5,
+        ratingCount: 2,
+      });
+    });
+
+    it("includes courses with no activity as zero rows", () => {
+      const { courses } = getInstructorAnalytics({
+        instructorId: base.instructor.id,
+        period: "30d",
+        now: NOW,
+      });
+
+      expect(courses).toHaveLength(1);
+      expect(courses[0]).toMatchObject({
+        courseId: base.course.id,
+        revenue: 0,
+        salesCount: 0,
+        enrollmentCount: 0,
+        averageRating: null,
+        ratingCount: 0,
+      });
+    });
+
+    it("only includes courses owned by the instructor", () => {
+      const otherInstructor = testDb
+        .insert(schema.users)
+        .values({
+          name: "Other",
+          email: "other2@example.com",
+          role: schema.UserRole.Instructor,
+        })
+        .returning()
+        .get();
+      testDb
+        .insert(schema.courses)
+        .values({
+          title: "Not Mine",
+          slug: "not-mine",
+          description: "x",
+          instructorId: otherInstructor.id,
+          categoryId: base.category.id,
+          status: schema.CourseStatus.Published,
+        })
+        .returning()
+        .get();
+
+      const { courses } = getInstructorAnalytics({
+        instructorId: base.instructor.id,
+        period: "30d",
+        now: NOW,
+      });
+
+      expect(courses).toHaveLength(1);
+      expect(courses[0].courseId).toBe(base.course.id);
+    });
+  });
 });
