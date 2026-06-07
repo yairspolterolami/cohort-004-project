@@ -165,14 +165,14 @@ function RevenueChart({ data }: { data: RevenueDataPoint[] }) {
                   labelFormatter={(label) => formatBucketLabel(String(label))}
                   contentStyle={{
                     borderRadius: "0.5rem",
-                    border: "1px solid hsl(var(--border))",
+                    border: "1px solid var(--border)",
                     fontSize: "0.75rem",
                   }}
                 />
                 <Line
                   type="monotone"
                   dataKey="revenue"
-                  stroke="hsl(var(--primary))"
+                  stroke="var(--primary)"
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 4 }}
