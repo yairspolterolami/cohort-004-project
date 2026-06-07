@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { ArrowDown, ArrowUp, ChevronsUpDown, DollarSign, Star, Users } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronsUpDown,
+  DollarSign,
+  LineChart as LineChartIcon,
+  Star,
+  Users,
+} from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -324,6 +332,21 @@ function CourseTable({ courses }: { courses: CourseBreakdown[] }) {
   );
 }
 
+function EmptyState() {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center py-16 text-center">
+        <LineChartIcon className="mb-4 size-10 text-muted-foreground/50" />
+        <p className="text-lg font-medium">No revenue data yet</p>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          Publish a course to start tracking analytics. If you already have
+          courses, try a wider time period above.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AnalyticsDashboard({
   analytics,
   period,
@@ -332,6 +355,25 @@ export function AnalyticsDashboard({
   period: AnalyticsPeriod;
 }) {
   const { summary, timeSeries, courses } = analytics;
+
+  // Empty when the instructor has no courses at all, or has courses but no
+  // revenue/enrollment/rating activity in the selected period. A single
+  // message covers both — we don't render a zeros KPI strip / flat chart /
+  // empty table for the "has courses, no sales in range" case.
+  const isEmpty =
+    courses.length === 0 ||
+    (summary.totalRevenue === 0 &&
+      summary.totalEnrollments === 0 &&
+      summary.ratingCount === 0);
+
+  if (isEmpty) {
+    return (
+      <div className="space-y-6">
+        <PeriodSelector period={period} />
+        <EmptyState />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
