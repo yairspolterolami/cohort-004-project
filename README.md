@@ -88,6 +88,8 @@ pnpm cherry-pick 03.04.01
 - **Build:** [Vite](https://vite.dev/) 7
 - **Real-time:** [Ably](https://ably.com/) for live presence
 
+<!-- pre-commit hook test: 2026-06-08 -->
+
 ## License
 
 This repository is for enrolled students of the [AI Coding for Real Engineers](https://www.aihero.dev/cohorts/ai-coding-for-real-engineers-with-claude-code-2026-04) cohort. All rights reserved.
